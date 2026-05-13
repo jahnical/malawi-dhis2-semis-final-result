@@ -6,8 +6,8 @@ export const useFinalResultConst = ({ updateData, data }: { data: any[], updateD
     const stage = dataStoreData?.['final-result']?.programStage
     const status = dataStoreData?.['final-result']?.status
 
-    function finalResultConst() {
-        let copy = [...data]
+    function finalResultConst(sourceData = data, shouldUpdate = true) {
+        let copy = sourceData.map((row) => ({ ...row }))
         for (let index = 0; index < copy.length; index++) {
             if (copy[index][status!]) {
                 const rawStatus = String(copy[index][status!]).trim();
@@ -21,7 +21,11 @@ export const useFinalResultConst = ({ updateData, data }: { data: any[], updateD
             }
         }
 
-        updateData(copy)
+        if (shouldUpdate) {
+            updateData(copy)
+        }
+
+        return copy
     }
 
     return {
