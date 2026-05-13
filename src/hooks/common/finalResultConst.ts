@@ -10,14 +10,14 @@ export const useFinalResultConst = ({ updateData, data }: { data: any[], updateD
         let copy = [...data]
         for (let index = 0; index < copy.length; index++) {
             if (copy[index][status!]) {
+                const rawStatus = String(copy[index][status!]).trim();
                 const option: any = programData?.programStages
                     ?.find(x => x.id === stage)?.programStageDataElements
                     ?.find(x => x.dataElement.id === status)
                     ?.dataElement.optionSet.options
-                    ?.find(x => x.value === copy[index][status!])
+                    ?.find(x => x.value === rawStatus || x.label?.toLowerCase() === rawStatus.toLowerCase())
 
-
-                copy[index][status!] = option ? statusComponent({ option: option! }) : undefined
+                copy[index][status!] = statusComponent({ option: option || { label: rawStatus, value: rawStatus, style: { color: "" } } })
             }
         }
 
