@@ -1,0 +1,42 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  text-transform: capitalize;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.icon {
+  font-size: 15px !important;
+}
+
+.promoted {
+  color: #1e6b24;
+  background-color: #e7f5ea;
+  border-color: #bde5c3;
+}
+
+.failed {
+  color: #b33434;
+  background-color: #fdecec;
+  border-color: #f2b8b8;
+}
+
+.dropout {
+  color: #a65218;
+  background-color: #fff1e8;
+  border-color: #f3c7ae;
+}
+
+.unknown {
+  color: #4a5768;
+  background-color: #f3f5f7;
+  border-color: #d7dde3;
+}
