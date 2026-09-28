@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
-import { useGetEvents, useUploadEvents, useUrlParams } from "dhis2-semis-functions"
+import { useGetEvents, useSectionProfile, useUploadEvents, useUrlParams } from "dhis2-semis-functions"
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
 
 export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform, setLoading }: { setLoading: (args: boolean) => void, setOpenPerform: any, setStats: (args: any) => void, selected: any[], setOpen: (args: boolean) => void }) {
@@ -8,6 +8,7 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
     const { urlParameters } = useUrlParams();
     const { school, sectionType } = urlParameters;
     const { uploadValues } = useUploadEvents()
+    const { promotionChoosesOrgUnit, promotionSkipsExistingYear } = useSectionProfile()
     const schoolCalendar = useSchoolCalendarKey()
     const { dataStoreData, program: programData } = useGetSelectedKeys()
     const programStagesToUse = useGetUsedProgramStages({ sectionType: sectionType as any })
@@ -19,7 +20,7 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
         let date = format(new Date(), 'yyyy-MM-dd')
         const socioEconomicPStage = dataStoreData["socio-economics"]?.programStage
 
-        const orgUnit = sectionType === 'staff' ? values.registeringSchool : school;
+        const orgUnit = promotionChoosesOrgUnit ? values.registeringSchool : school;
 
         const { registeringSchool, enrollment_date, ...registrationValues } = values
         for (const key in registrationValues) {
@@ -34,7 +35,7 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
         }
 
         for (const tei of selected) {
-            const checkAlreadyPromoted = sectionType === 'staff'
+            const checkAlreadyPromoted = !promotionSkipsExistingYear
                 ? []
                 : await getEvents({ program: tei.programId, fields: "*", trackedEntities: tei.trackedEntity, programStage: dataStoreData.registration.programStage, filter: [`${schoolCalendar?.academicYear}:in:${values?.[schoolCalendar?.academicYear]}`] })
 
