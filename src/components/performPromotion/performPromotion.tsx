@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { Form } from "react-final-form";
 import { NoticeBox, Button, IconAddCircle24, CircularLoader, Center } from "@dhis2/ui";
 import useGetSelectedKeys from "../../hooks/config/useGetSelectedKeys";
-import { RulesEngine, useUrlParams } from "dhis2-semis-functions";
+import { RulesEngine, useSectionProfile, useUrlParams } from "dhis2-semis-functions";
 import { usePromoteStudents } from "../../hooks/promote/usePromoteStudents";
 import { WithBorder, CustomForm, ModalComponent, WithPadding } from "dhis2-semis-components";
 import { Tooltip } from "@mui/material";
@@ -18,10 +18,11 @@ export default function PerformPromotion({ selected, setStats, openStats, formDa
     const [loading, setLoading] = useState(false)
     const { promote } = usePromoteStudents({ selected, setOpen: openStats, setStats, setOpenPerform: setOpen, setLoading })
     const labels = getContextualLabels(sectionType as string)
+    const { promotionChoosesOrgUnit } = useSectionProfile()
     const { orgUnits, loading: orgUnitsLoading, error: orgUnitsError, retry, hasOrgUnits } = useAccessibleOrgUnits()
 
     const getInitialOrgUnit = () => {
-        if (sectionType !== 'staff' || !orgUnits.length) return school;
+        if (!promotionChoosesOrgUnit || !orgUnits.length) return school;
         const currentSchoolExists = orgUnits.some(ou => ou.id === school);
         return currentSchoolExists ? school : orgUnits[0]?.id;
     };
@@ -63,11 +64,11 @@ export default function PerformPromotion({ selected, setStats, openStats, formDa
     }, [school])
 
     useEffect(() => {
-        if (sectionType === 'staff' && orgUnits.length > 0) {
+        if (promotionChoosesOrgUnit && orgUnits.length > 0) {
             const initialOrgUnit = getInitialOrgUnit();
             setSelectedOrgUnit(initialOrgUnit || undefined);
         }
-    }, [orgUnits, sectionType])
+    }, [orgUnits, promotionChoosesOrgUnit])
 
 
     useEffect(() => {
@@ -75,7 +76,7 @@ export default function PerformPromotion({ selected, setStats, openStats, formDa
     }, [values])
 
     const modifyRegisteringSchoolField = (fields: any[]) => {
-        if (sectionType !== 'staff') return fields;
+        if (!promotionChoosesOrgUnit) return fields;
 
         return fields.map(field => {
             if (field.name === 'registeringSchool') {
@@ -102,7 +103,7 @@ export default function PerformPromotion({ selected, setStats, openStats, formDa
     const handleChange = (e: { field: any; value: string; name: string }) => {
         const { name, value } = e;
 
-        if (name === 'registeringSchool' && sectionType === 'staff') {
+        if (name === 'registeringSchool' && promotionChoosesOrgUnit) {
             setSelectedOrgUnit(value);
         }
 
@@ -151,14 +152,14 @@ export default function PerformPromotion({ selected, setStats, openStats, formDa
                         </NoticeBox>
                         <WithPadding />
 
-                        {sectionType === 'staff' && orgUnitsLoading && (
+                        {promotionChoosesOrgUnit && orgUnitsLoading && (
                             <Center>
                                 <CircularLoader small />
                                 <p>Loading organization units...</p>
                             </Center>
                         )}
 
-                        {sectionType === 'staff' && orgUnitsError && (
+                        {promotionChoosesOrgUnit && orgUnitsError && (
                             <NoticeBox error title={i18n.t("Error loading organization units")}>
                                 {i18n.t("Failed to load accessible organization units")}. {orgUnitsError.message}
                                 <WithPadding />
@@ -166,20 +167,20 @@ export default function PerformPromotion({ selected, setStats, openStats, formDa
                             </NoticeBox>
                         )}
 
-                        {sectionType === 'staff' && !orgUnitsLoading && !orgUnitsError && !hasOrgUnits && (
+                        {promotionChoosesOrgUnit && !orgUnitsLoading && !orgUnitsError && !hasOrgUnits && (
                             <NoticeBox error title={i18n.t("No accessible organization units")}>
                                 {i18n.t("You do not have data-entry access to any organization units. Contact your administrator to grant you the necessary permissions")}.
                             </NoticeBox>
                         )}
 
-                        {((sectionType === 'staff' && hasOrgUnits && !orgUnitsLoading && !orgUnitsError) || sectionType !== 'staff') && (
+                        {((promotionChoosesOrgUnit && hasOrgUnits && !orgUnitsLoading && !orgUnitsError) || !promotionChoosesOrgUnit) && (
                             <WithBorder type="all" >
                                 <WithPadding>
                                     <CustomForm
                                         Form={Form}
                                         loading={loading}
                                         initialValues={{
-                                            registeringSchool: sectionType === 'staff' ? (selectedOrgUnit || school) : schoolName,
+                                            registeringSchool: promotionChoosesOrgUnit ? (selectedOrgUnit || school) : schoolName,
                                             enrollment_date: format(new Date(), 'yyyy-MM-dd')
                                         }}
                                         formFields={[

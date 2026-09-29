@@ -1,2 +1,2 @@
-import FinalResult from './app/App'
-export { FinalResult }
+import FinalResult, { StaffReEnrollmentApp as StaffReEnrollment } from './app/App'
+export { FinalResult, StaffReEnrollment }

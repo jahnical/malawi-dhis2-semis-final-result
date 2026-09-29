@@ -8,7 +8,7 @@ import { Box, FormControl, MenuItem, Select } from '@mui/material';
 import useGetSelectedKeys from '../../hooks/config/useGetSelectedKeys';
 import { useFinalResultConst } from '../../hooks/common/finalResultConst';
 import EnrollmentActionsButtons from "../../components/enrollmentButtons/EnrollmentActionsButtons";
-import { useCheckFilters, useGetEvents, useHeader, useTableData, useUrlParams, useViewPortWidth } from "dhis2-semis-functions";
+import { useCheckFilters, useGetEvents, useHeader, useTableData, useTableSort, useUrlParams, useViewPortWidth } from "dhis2-semis-functions";
 
 const TERM3_TOTAL_KEY = "term3Total";
 const STUDENT_LEVEL_KEY = "studentLevel";
@@ -55,8 +55,9 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
   const [finalDecisionFilter, setFinalDecisionFilter] = useState("ALL")
   const [term3Sort, setTerm3Sort] = useState<"none" | "asc" | "desc">("none")
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50, totalPages: 0, totalElements: 0 })
+  const { sort, order, orderBy, createSortHandler, withSortableColumns } = useTableSort({ onSortChange: () => setPagination((prev) => ({ ...prev, page: 1 })) })
   const { academicYear, grade, class: section, schoolName, school, sectionType } = urlParameters;
-  const { getData, tableData, loading } = useTableData({ module: Modules.Final_Result });
+  const { getData, tableData, loading, sortableKeys } = useTableData({ module: Modules.Final_Result });
   const { columns } = useHeader({ dataStoreData, programConfigData: programData as unknown as ProgramConfig, programStage: dataStoreData?.['final-result']?.programStage as unknown as string });
   const { getEvents } = useGetEvents();
   const [filetrState, setFilterState] = useState<{ dataElements: any[], attributes: any[] }>({ attributes: [], dataElements: [] });
@@ -274,9 +275,10 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
           ...getFilters() as unknown as any
         ],
         otherProgramStage: dataStoreData?.['final-result']?.programStage,
-        order: dataStoreData.defaults.defaultOrder
+        order: dataStoreData.defaults.defaultOrder,
+        sort: sort && { ...sort, program: programData! },
       })
-  }, [sectionType, filetrState, refetch, pagination.page, pagination.pageSize, academicYear, grade, section, school])
+  }, [sectionType, filetrState, refetch, pagination.page, pagination.pageSize, academicYear, grade, section, school, sort])
 
   useEffect(() => {
     setPagination((prev) => ({ ...prev, totalPages: tableData.pagination.totalPages, totalElements: tableData.pagination.totalElements }))
@@ -416,7 +418,7 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
               programConfig={programData!}
               title={tableTitle}
               viewPortWidth={viewPortWidth}
-              columns={computedColumns}
+              columns={withSortableColumns(computedColumns, sortableKeys)}
               tableData={displayedRows}
               inactiveRowMessage={inactiveRowMessage}
               enableInactiveRowSelection={true}
@@ -438,6 +440,10 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
               pagination={pagination}
               setPagination={setPagination}
               paginate={!loading}
+              sortable
+              order={order}
+              orderBy={orderBy}
+              createSortHandler={createSortHandler}
               beforeSettings={
                 <Box
                   sx={{
