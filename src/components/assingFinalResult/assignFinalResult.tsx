@@ -7,6 +7,7 @@ import useGetSelectedKeys from "../../hooks/config/useGetSelectedKeys";
 import { WithBorder, ModalComponent, CustomForm, WithPadding } from "dhis2-semis-components";
 import { useGetDataElements, useUploadEvents, useGetEvents, useUrlParams, RulesEngine } from "dhis2-semis-functions";
 import { format } from "date-fns";
+import { useShowAlerts } from 'dhis2-semis-functions';
 import { getContextualLabels } from "../../utils/common/getContextualLabels";
 import { dataStoreRecord } from "src/types/dataStore/DataStoreConfig";
 
@@ -23,6 +24,7 @@ export default function AsssignFinalResult({ selected, i18n }: { selected: any[]
     const [loading, setLoading] = useState(false)
     const [formValues, setFormValues] = useState<{ [key: string]: any }>({ orgUnit: school })
     const { uploadValues } = useUploadEvents()
+    const { show } = useShowAlerts()
     const { getEvents } = useGetEvents()
     const setRefetch = useSetRecoilState(TableDataRefetch);
     const labels = getContextualLabels(sectionType as string)
@@ -65,6 +67,7 @@ export default function AsssignFinalResult({ selected, i18n }: { selected: any[]
 
     async function formSubmit(values: any) {
         setLoading(true)
+        try {
         let teis = []
         const frStatus =
             finalResult?.status ||
@@ -83,7 +86,7 @@ export default function AsssignFinalResult({ selected, i18n }: { selected: any[]
 
         if (!frStatus) {
             setLoading(false)
-            setOpen(false)
+            show({ message: i18n.t('Please configure the final result field before submitting.'), type: { critical: true } })
             return
         }
 
@@ -93,6 +96,7 @@ export default function AsssignFinalResult({ selected, i18n }: { selected: any[]
                 trackedEntities: tei?.trackedEntity,
                 programStage: finalResult?.programStage
             })
+            if (!Array.isArray(frEvents)) throw new Error(i18n.t('Could not load the existing results. Please try again.'))
             const selectedEnrollmentFrEvent = frEvents.find((x: any) => x.enrollment === tei?.enrollmentId)
 
             if (selectedEnrollmentFrEvent) {
@@ -172,7 +176,12 @@ export default function AsssignFinalResult({ selected, i18n }: { selected: any[]
 
         await uploadValues({ trackedEntities: teis }, 'COMMIT', 'CREATE_AND_UPDATE')
             .then(() => { setLoading(false); setRefetch((prev: any) => (!prev)); setOpen(false) })
-            .catch(() => { setLoading(false); setOpen(false) })
+            .catch(() => { /* The upload hook displays the error; retain the form. */ })
+        } catch (error: any) {
+            show({ message: error?.message ?? i18n.t('Could not save the final result.'), type: { critical: true } })
+        } finally {
+            setLoading(false)
+        }
     }
 
 
