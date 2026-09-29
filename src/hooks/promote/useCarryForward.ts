@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
-import { useGetCompleteTeis, useUploadEvents, useUrlParams } from "dhis2-semis-functions";
+import { getProgramNames, useGetCompleteTeis, useUploadEvents, useUrlParams } from "dhis2-semis-functions";
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
 
 export interface CarryForwardRow {
@@ -148,9 +148,17 @@ export function useCarryForward() {
             }
         })
 
-        if (trackedEntities.length) await uploadValues({ trackedEntities }, "COMMIT", "CREATE_AND_UPDATE")
+        if (trackedEntities.length === 0) return { posted: 0, conflicts: skipped }
 
-        return { posted: trackedEntities.length, conflicts: skipped }
+        // Errors (e.g. a duplicate unique attribute) are shown by uploadValues with the server's reason
+        const response: any = await uploadValues({ trackedEntities }, "COMMIT", "CREATE_AND_UPDATE", {
+            errorMessage: "Could not carry staff forward",
+            names: getProgramNames(program),
+        })
+        // Some records can be rejected while the rest save; count the enrollments actually created
+        const created = response?.bundleReport?.typeReportMap?.ENROLLMENT?.stats?.created
+
+        return { posted: typeof created === "number" ? created : trackedEntities.length, conflicts: skipped }
     }
 
     return { carryForward, getAlreadyRegistered, getStageValues, registrationStage, academicYearDataElement }

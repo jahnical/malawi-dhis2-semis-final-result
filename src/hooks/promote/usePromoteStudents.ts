@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
-import { useGetEvents, useSectionProfile, useUploadEvents, useUrlParams } from "dhis2-semis-functions"
+import { getProgramNames, useGetEvents, useSectionProfile, useUploadEvents, useUrlParams } from "dhis2-semis-functions"
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
 
 export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform, setLoading }: { setLoading: (args: boolean) => void, setOpenPerform: any, setStats: (args: any) => void, selected: any[], setOpen: (args: boolean) => void }) {
@@ -83,7 +83,7 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
             } else setStats((prev: any) => ({ ...prev, conflicts: [...prev.conflicts, tei] }))
         }
 
-        if (enrollments.length) await uploadValues({ trackedEntities: enrollments }, 'COMMIT', 'CREATE_AND_UPDATE')
+        if (enrollments.length) await uploadValues({ trackedEntities: enrollments }, 'COMMIT', 'CREATE_AND_UPDATE', { errorMessage: "Could not complete promotion", names: getProgramNames(programData) })
 
         setStats((prev: any) => ({ ...prev, posted: enrollments.length }))
         setOpenPerform(false)

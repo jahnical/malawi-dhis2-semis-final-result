@@ -182,6 +182,8 @@ export default function CarryForward({ selected, i18n, openStats, setStats }: Ca
             setOpen(false)
             openStats(true)
             setRefetch((prev: boolean) => !prev)
+        } catch {
+            // The reason is already shown; keep the review open so it can be fixed and retried
         } finally {
             setSaving(false)
         }
