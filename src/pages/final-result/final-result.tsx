@@ -8,7 +8,7 @@ import { Box, FormControl, MenuItem, Select } from '@mui/material';
 import useGetSelectedKeys from '../../hooks/config/useGetSelectedKeys';
 import { useFinalResultConst } from '../../hooks/common/finalResultConst';
 import EnrollmentActionsButtons from "../../components/enrollmentButtons/EnrollmentActionsButtons";
-import { useCheckFilters, useGetEvents, useHeader, useTableData, useTableSort, useUrlParams, useViewPortWidth } from "dhis2-semis-functions";
+import { getInfoInstructions, useCheckFilters, useGetEvents, useHeader, useTableData, useTableSort, useUrlParams, useViewPortWidth } from "dhis2-semis-functions";
 
 const TERM3_TOTAL_KEY = "term3Total";
 const STUDENT_LEVEL_KEY = "studentLevel";
@@ -240,19 +240,13 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
       return {
         title: i18n.t("SEMIS-Staff-Re-enrollment"),
         sectionTitle: `${i18n.t("Follow the instructions to proceed")}:`,
-        instructions: [
-          i18n.t("Select the Organization unit you want to view data"),
-          i18n.t("Use global filters(Type of Staff, Employment Type and Academic Year)")
-        ]
+        instructions: getInfoInstructions({ i18n, filters: (dataStoreData?.filters?.dataElements ?? []) as any, program: programData as any, academicYear: "required", sectionFilters: "optional" })
       }
     }
     return {
       title: i18n.t("SEMIS-Final-Result"),
       sectionTitle: `${i18n.t("Follow the instructions to proceed")}:`,
-      instructions: [
-        i18n.t("Select the Organization unit you want to view data"),
-        i18n.t("Use global filters(Class, Grade and Academic Year)")
-      ]
+      instructions: getInfoInstructions({ i18n, filters: (dataStoreData?.filters?.dataElements ?? []) as any, program: programData as any, academicYear: "required", sectionFilters: "optional" })
     }
   }
 

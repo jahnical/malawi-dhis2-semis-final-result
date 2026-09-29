@@ -2,7 +2,7 @@ import { useRecoilValue } from "recoil";
 import { useEffect, useState } from "react";
 import { InfoPage, Table, useSchoolCalendarKey } from "dhis2-semis-components";
 import { D2I18n, Modules, ProgramConfig, TableDataRefetch } from "dhis2-semis-types";
-import { useCheckFilters, useHeader, useTableData, useTableSort, useUrlParams, useViewPortWidth } from "dhis2-semis-functions";
+import { getInfoInstructions, useCheckFilters, useHeader, useTableData, useTableSort, useUrlParams, useViewPortWidth } from "dhis2-semis-functions";
 import useGetSelectedKeys from "../../hooks/config/useGetSelectedKeys";
 import EnrollmentActionsButtons from "../../components/enrollmentButtons/EnrollmentActionsButtons";
 
@@ -57,10 +57,7 @@ export default function StaffReEnrollment({ i18n, baseUrl }: { i18n: D2I18n, bas
                     title={i18n.t("SEMIS-Staff-Re-enrollment")}
                     sections={[{
                         sectionTitle: `${i18n.t("Follow the instructions to proceed")}:`,
-                        instructions: [
-                            i18n.t("Select the Organization unit you want to view data"),
-                            i18n.t("Choose the academic year to carry staff forward from"),
-                        ]
+                        instructions: getInfoInstructions({ i18n, filters: (dataStoreData?.filters?.dataElements ?? []) as any, program: program as any, academicYear: "required", sectionFilters: "optional" })
                     }]}
                 />
                 :
