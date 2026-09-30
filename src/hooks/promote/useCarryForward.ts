@@ -36,14 +36,14 @@ export function useCarryForward() {
     const socioEconomicStage = dataStoreData?.["socio-economics"]?.programStage
     const academicYearDataElement = schoolCalendar?.academicYear as unknown as string
 
-    // The events API (2.40) takes only one tracked entity per request, but tracked entities can be
-    // fetched as a ';' list, so load each batch's events through them: one request per 50 people.
+    // The events API takes only one tracked entity per request, but tracked entities can be
+    // fetched as a list, so load each batch's events through them: one request per 50 people.
     async function getEventsByTrackedEntity(trackedEntities: string[]): Promise<Map<string, any[]>> {
         const byTrackedEntity = new Map<string, any[]>()
         for (const batch of toBatches(Array.from(new Set(trackedEntities)))) {
             const response: any = await getCompleteTeis({
                 program: program?.id as string,
-                trackedEntities: batch.join(";"),
+                trackedEntities: batch,
                 orgUnitMode: "ACCESSIBLE",
                 pageSize: BATCH_SIZE,
                 fields: "trackedEntity,enrollments[enrollment,program,events[event,enrollment,programStage,dataValues[dataElement,value]]]",
