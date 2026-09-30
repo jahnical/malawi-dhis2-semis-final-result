@@ -18,7 +18,7 @@ export default function PerformPromotion({ selected, setStats, openStats, formDa
     const [loading, setLoading] = useState(false)
     const { promote } = usePromoteStudents({ selected, setOpen: openStats, setStats, setOpenPerform: setOpen, setLoading })
     const labels = getContextualLabels(sectionType as string)
-    const { promotionChoosesOrgUnit } = useSectionProfile()
+    const { promotionChoosesOrgUnit, promotionSkipsExistingYear } = useSectionProfile()
     const { orgUnits, loading: orgUnitsLoading, error: orgUnitsError, retry, hasOrgUnits } = useAccessibleOrgUnits()
 
     const getInitialOrgUnit = () => {
@@ -147,8 +147,11 @@ export default function PerformPromotion({ selected, setStats, openStats, formDa
             {
                 open && <ModalComponent
                     children={<WithPadding>
-                        <NoticeBox title={`${i18n.t("WARNING")}! ${selected.length} ${i18n.t("rows will be affected")}`} warning>
-                            {i18n.t("No one will be able to access this program. Add some Organisation Units to the access list")}.
+                        <NoticeBox warning title={selected.length === 1
+                            ? i18n.t("1 {{entity}} selected", { entity: labels.entityName })
+                            : i18n.t("{{count}} {{entities}} selected", { count: selected.length, entities: labels.entityNamePlural })}>
+                            {i18n.t("Each selected {{entity}} gets a new enrollment in the academic year chosen below.", { entity: labels.entityName })}
+                            {promotionSkipsExistingYear ? ` ${i18n.t("Anyone already enrolled in that year is skipped.")}` : ""}
                         </NoticeBox>
                         <WithPadding />
 
