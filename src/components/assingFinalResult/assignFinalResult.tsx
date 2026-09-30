@@ -6,10 +6,20 @@ import { NoticeBox, Button, IconAddCircle24 } from "@dhis2/ui";
 import useGetSelectedKeys from "../../hooks/config/useGetSelectedKeys";
 import { WithBorder, ModalComponent, CustomForm, WithPadding } from "dhis2-semis-components";
 import { useGetDataElements, useUploadEvents, useGetEvents, useUrlParams, RulesEngine } from "dhis2-semis-functions";
+import { useDataEngine } from "@dhis2/app-runtime";
 import { format } from "date-fns";
+import { finalResultTrackedEntity } from "../../utils/finalResult/finalResultPayload";
 import { useShowAlerts } from 'dhis2-semis-functions';
 import { getContextualLabels } from "../../utils/common/getContextualLabels";
 import { dataStoreRecord } from "src/types/dataStore/DataStoreConfig";
+
+const ENROLLMENT_QUERY: any = {
+    enrollment: {
+        resource: "tracker/enrollments",
+        id: ({ id }: { id: string }) => id,
+        params: { fields: "enrollment,trackedEntity,program,orgUnit,status,enrolledAt,occurredAt" },
+    }
+}
 
 export default function AsssignFinalResult({ selected, i18n }: { selected: any[], i18n: any }) {
     const { dataStoreData, program } = useGetSelectedKeys()
@@ -26,6 +36,7 @@ export default function AsssignFinalResult({ selected, i18n }: { selected: any[]
     const { uploadValues } = useUploadEvents()
     const { show } = useShowAlerts()
     const { getEvents } = useGetEvents()
+    const engine = useDataEngine()
     const setRefetch = useSetRecoilState(TableDataRefetch);
     const labels = getContextualLabels(sectionType as string)
 
@@ -99,79 +110,26 @@ export default function AsssignFinalResult({ selected, i18n }: { selected: any[]
             if (!Array.isArray(frEvents)) throw new Error(i18n.t('Could not load the existing results. Please try again.'))
             const selectedEnrollmentFrEvent = frEvents.find((x: any) => x.enrollment === tei?.enrollmentId)
 
-            if (selectedEnrollmentFrEvent) {
-                const existingDataValues = selectedEnrollmentFrEvent?.dataValues || []
-                const mergedDataValuesMap = new Map<string, any>()
+            // The enrollment keeps its own org unit and dates; only its status changes
+            const enrollment: any = await engine.query(ENROLLMENT_QUERY, { variables: { id: tei?.enrollmentId } })
+                .then((response: any) => response?.enrollment)
+                .catch(() => undefined)
+            if (!enrollment?.enrollment) throw new Error(i18n.t('Could not load the enrollment. Please try again.'))
 
-                for (const dataValue of existingDataValues) {
-                    if (dataValue?.dataElement) {
-                        mergedDataValuesMap.set(dataValue.dataElement, dataValue.value)
-                    }
-                }
-
-                for (const dataValue of submittedDataValues) {
-                    mergedDataValuesMap.set(dataValue.dataElement, dataValue.value)
-                }
-
-                const mergedDataValues = Array.from(mergedDataValuesMap.entries()).map(([dataElement, value]) => ({
-                    dataElement,
-                    value
-                }))
-
-                teis.push({
-                    orgUnit: school,
-                    trackedEntityType: trackedEntityType,
-                    trackedEntity: selectedEnrollmentFrEvent?.trackedEntity,
-                    enrollments: [
-                        {
-                            trackedEntity: tei?.trackedEntity,
-                            enrollment: tei?.enrollmentId,
-                            status: finalResult?.dropoutStatusValues?.includes(values[frStatus]) ? "CANCELLED" : "COMPLETED",
-                            orgUnit: selectedEnrollmentFrEvent?.orgUnit,
-                            program: selectedEnrollmentFrEvent?.program,
-                            enrolledAt: selectedEnrollmentFrEvent?.occurredAt,
-                            occurredAt: selectedEnrollmentFrEvent?.occurredAt,
-                            trackedEntityType: trackedEntityType,
-                            events: [
-                                {
-                                    ...selectedEnrollmentFrEvent,
-                                    dataValues: mergedDataValues
-                                }
-                            ]
-                        }
-                    ]
-                })
-            }
-            else {
-                teis.push({
-                    orgUnit: school,
-                    trackedEntity: tei?.trackedEntity,
-                    trackedEntityType: trackedEntityType,
-                    enrollments: [
-                        {
-                            orgUnit: school,
-                            program: tei?.programId,
-                            trackedEntity: tei?.trackedEntity,
-                            enrollment: tei?.enrollmentId,
-                            trackedEntityType: trackedEntityType,
-                            enrolledAt: format(new Date(), "yyyy-MM-dd"),
-                            occurredAt: format(new Date(), "yyyy-MM-dd"),
-                            status: finalResult?.dropoutStatusValues?.includes(values[frStatus]) ? "CANCELLED" : "COMPLETED",
-                            events: [
-                                {
-                                    orgUnit: school,
-                                    status: "COMPLETED",
-                                    program: tei?.programId,
-                                    programStage: finalResult?.programStage,
-                                    occurredAt: format(new Date(), "yyyy-MM-dd"),
-                                    scheduledAt: format(new Date(), "yyyy-MM-dd"),
-                                    dataValues: submittedDataValues
-                                }
-                            ]
-                        }
-                    ]
-                })
-            }
+            teis.push(finalResultTrackedEntity({
+                enrollment,
+                trackedEntity: tei?.trackedEntity,
+                trackedEntityType,
+                program: tei?.programId ?? enrollment.program,
+                existingEvent: selectedEnrollmentFrEvent,
+                submittedDataValues,
+                statusDataElement: frStatus,
+                dropoutStatusValues: finalResult?.dropoutStatusValues,
+                programStage: finalResult?.programStage,
+                eventOrgUnit: tei?.orgUnitId ?? school,
+                trackedEntityOrgUnit: school as string,
+                today: format(new Date(), "yyyy-MM-dd"),
+            }))
         }
 
         await uploadValues({ trackedEntities: teis }, 'COMMIT', 'CREATE_AND_UPDATE')

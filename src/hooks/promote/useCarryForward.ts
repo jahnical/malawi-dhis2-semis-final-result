@@ -1,7 +1,8 @@
 import { format } from "date-fns";
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
-import { getProgramNames, useGetCompleteTeis, useUploadEvents, useUrlParams } from "dhis2-semis-functions";
+import { enrollmentDates, getAcademicYearOptions, getProgramNames, useGetLearnerEnrollments, useShowAlerts, useUploadEvents, useUrlParams } from "dhis2-semis-functions";
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
+import { newYearEvents, newYearTrackedEntity } from "../../utils/promotion/newYearPayload";
 
 export interface CarryForwardRow {
     trackedEntity: string
@@ -13,20 +14,14 @@ export interface CarryForwardRow {
     row: any
 }
 
-const BATCH_SIZE = 50
-
-const toBatches = <T,>(items: T[]) => {
-    const batches: T[][] = []
-    for (let i = 0; i < items.length; i += BATCH_SIZE) batches.push(items.slice(i, i + BATCH_SIZE))
-    return batches
-}
-
 // Re-enrollment for sections that carry each person's own record forward (staff):
 // the new registration starts from their current one, only the academic year and any
-// adjusted fields change, and anyone already registered in the target year is skipped.
+// adjusted fields change, and anyone already registered in the target year (or enrolled in
+// a later one) is skipped.
 export function useCarryForward() {
-    const { getCompleteTeis } = useGetCompleteTeis()
+    const { getLearnerEnrollments, planEnrollments } = useGetLearnerEnrollments()
     const { uploadValues } = useUploadEvents()
+    const { show } = useShowAlerts()
     const { urlParameters } = useUrlParams()
     const { sectionType } = urlParameters
     const schoolCalendar = useSchoolCalendarKey()
@@ -36,42 +31,42 @@ export function useCarryForward() {
     const socioEconomicStage = dataStoreData?.["socio-economics"]?.programStage
     const academicYearDataElement = schoolCalendar?.academicYear as unknown as string
 
-    // The events API takes only one tracked entity per request, but tracked entities can be
-    // fetched as a list, so load each batch's events through them: one request per 50 people.
-    async function getEventsByTrackedEntity(trackedEntities: string[]): Promise<Map<string, any[]>> {
+    const years = () => ({ calendars: schoolCalendar?.schoolCalendar ?? [], options: getAcademicYearOptions(program, academicYearDataElement) })
+
+    // Events of every enrollment in the program, per tracked entity (loaded 50 people per request)
+    function eventsOf(enrollments: Map<string, any[]>): Map<string, any[]> {
         const byTrackedEntity = new Map<string, any[]>()
-        for (const batch of toBatches(Array.from(new Set(trackedEntities)))) {
-            const response: any = await getCompleteTeis({
-                program: program?.id as string,
-                trackedEntities: batch,
-                orgUnitMode: "ACCESSIBLE",
-                pageSize: BATCH_SIZE,
-                fields: "trackedEntity,enrollments[enrollment,program,events[event,enrollment,programStage,dataValues[dataElement,value]]]",
-            } as any)
-            const teis = response?.results?.instances ?? response?.results?.trackedEntities ?? []
-            for (const tei of teis) {
-                const events = (tei?.enrollments ?? [])
-                    .filter((enrollment: any) => !enrollment?.program || enrollment.program === program?.id)
-                    .flatMap((enrollment: any) => (enrollment?.events ?? []).map((event: any) => ({ ...event, enrollment: event?.enrollment ?? enrollment?.enrollment })))
-                byTrackedEntity.set(tei.trackedEntity, events)
-            }
+        for (const [trackedEntity, teiEnrollments] of enrollments) {
+            byTrackedEntity.set(trackedEntity, teiEnrollments.flatMap((enrollment: any) =>
+                (enrollment?.events ?? []).map((event: any) => ({ ...event, enrollment: event?.enrollment ?? enrollment?.enrollment }))))
         }
         return byTrackedEntity
+    }
+
+    async function getEventsByTrackedEntity(trackedEntities: string[]): Promise<Map<string, any[]>> {
+        return eventsOf(await getLearnerEnrollments(trackedEntities, program?.id as string))
+    }
+
+    function planTargetYear(trackedEntities: string[], targetYear: string) {
+        return planEnrollments({
+            trackedEntities,
+            program: program?.id as string,
+            targetAcademicYear: targetYear,
+            currentAcademicYear: schoolCalendar?.defaults?.academicYear ?? targetYear,
+            registrationStage,
+            academicYearDataElement,
+            years: years(),
+        })
     }
 
     const valueOf = (event: any, dataElement?: string) =>
         event?.dataValues?.find((dv: any) => dv.dataElement === dataElement)?.value
 
-    // Tracked entities that already have a registration in the target academic year
+    // Tracked entities that cannot be registered in the target academic year: already registered
+    // there, or enrolled in a later year
     async function getAlreadyRegistered(trackedEntities: string[], targetYear: string): Promise<Set<string>> {
-        const registered = new Set<string>()
-        const events = await getEventsByTrackedEntity(trackedEntities)
-        for (const [trackedEntity, teiEvents] of events) {
-            if (teiEvents.some((e) => e.programStage === registrationStage && valueOf(e, academicYearDataElement) === targetYear)) {
-                registered.add(trackedEntity)
-            }
-        }
-        return registered
+        const { plans } = await planTargetYear(Array.from(new Set(trackedEntities)), targetYear)
+        return new Set(Array.from(plans.entries()).filter(([, plan]) => plan.conflict).map(([trackedEntity]) => trackedEntity))
     }
 
     // Latest value of one data element in one stage, per enrollment (e.g. the re-enrollment status)
@@ -107,45 +102,42 @@ export function useCarryForward() {
         const trackedEntityIds = rows.map((x) => x.trackedEntity)
 
         // Checked again at save time, in case someone was carried forward since the review opened
-        const events = await getEventsByTrackedEntity(trackedEntityIds)
-        const alreadyRegistered = new Set(Array.from(events.entries())
-            .filter(([, teiEvents]) => teiEvents.some((e) => e.programStage === registrationStage && valueOf(e, academicYearDataElement) === targetYear))
-            .map(([trackedEntity]) => trackedEntity))
-        const toCreate = rows.filter((x) => !alreadyRegistered.has(x.trackedEntity))
-        const skipped = rows.filter((x) => alreadyRegistered.has(x.trackedEntity)).map((x) => x.row)
+        const { plans, enrollments } = await planTargetYear(trackedEntityIds, targetYear)
+        const events = eventsOf(enrollments)
+        const toCreate = rows.filter((x) => !plans.get(x.trackedEntity)?.conflict)
+        const skipped = rows.filter((x) => plans.get(x.trackedEntity)?.conflict).map((x) => x.row)
         const socioEconomic = socioEconomicByEnrollment(events)
 
-        const event = (stage: string, orgUnit: string, dataValues: any[]) => ({
-            occurredAt: date, notes: [], status: "ACTIVE", program: program?.id, programStage: stage, orgUnit, scheduledAt: date, dataValues
-        })
+        // occurredAt is the target year's start; enrolledAt the date entered (default: that start)
+        const { calendarFound, ...dates } = enrollmentDates({ calendar: schoolCalendar?.schoolCalendar ?? [], academicYear: targetYear, enrollmentDate, options: years().options })
+        if (!calendarFound && toCreate.length) {
+            show({ message: "The academic year is not in the school calendar. The enrollment date is used as its start date.", type: { warning: true } })
+        }
 
         const trackedEntities = toCreate.map((item) => {
             const registrationDataValues = Object.entries({ ...item.registrationValues, [academicYearDataElement]: targetYear })
                 .filter(([, value]) => value !== undefined && value !== null && value !== "")
                 .map(([dataElement, value]) => ({ dataElement, value }))
 
-            const socioValues = socioEconomic.get(item.enrollmentId)
-            const events = [
-                ...(socioValues?.length ? [event(socioEconomicStage!, item.orgUnit, socioValues)] : []),
-                event(registrationStage, item.orgUnit, registrationDataValues),
-                ...programStagesToUse.map((stage) => event(stage as string, item.orgUnit, [])),
-            ]
-
-            // Same enrollment shape as the existing promotion flow
-            return {
+            // Same enrollment shape as the promotion flow
+            return newYearTrackedEntity({
                 trackedEntity: item.trackedEntity,
                 trackedEntityType: dataStoreData?.trackedEntityType,
                 orgUnit: item.orgUnit,
-                attributes: [],
-                enrollments: [{
-                    occurredAt: date,
-                    enrolledAt: enrollmentDate,
-                    program: program?.id,
+                program: program?.id as string,
+                plan: plans.get(item.trackedEntity)!,
+                dates,
+                events: newYearEvents({
+                    program: program?.id as string,
                     orgUnit: item.orgUnit,
-                    status: "COMPLETED",
-                    events,
-                }],
-            }
+                    date,
+                    registrationStage,
+                    registrationValues: registrationDataValues,
+                    socioEconomicStage,
+                    socioEconomicValues: socioEconomic.get(item.enrollmentId),
+                    placeholderStages: programStagesToUse as string[],
+                }),
+            })
         })
 
         if (trackedEntities.length === 0) return { posted: 0, conflicts: skipped }
