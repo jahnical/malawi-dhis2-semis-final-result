@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { useShowAlerts } from 'dhis2-semis-functions';
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
 import { getProgramNames, useGetEvents, useSectionProfile, useUploadEvents, useUrlParams } from "dhis2-semis-functions"
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
@@ -8,6 +9,7 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
     const { urlParameters } = useUrlParams();
     const { school, sectionType } = urlParameters;
     const { uploadValues } = useUploadEvents()
+    const { show } = useShowAlerts()
     const { promotionChoosesOrgUnit, promotionSkipsExistingYear } = useSectionProfile()
     const schoolCalendar = useSchoolCalendarKey()
     const { dataStoreData, program: programData } = useGetSelectedKeys()
@@ -15,6 +17,7 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
 
     async function promote(values: any) {
         setLoading(true)
+        try {
         let enrollments: any[] = []
         let registrationEvent: any = []
         let date = format(new Date(), 'yyyy-MM-dd')
@@ -39,11 +42,13 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
                 ? []
                 : await getEvents({ program: tei.programId, fields: "*", trackedEntities: tei.trackedEntity, programStage: dataStoreData.registration.programStage, filter: [`${schoolCalendar?.academicYear}:in:${values?.[schoolCalendar?.academicYear]}`] })
 
-            if (checkAlreadyPromoted?.length === 0) {
+            if (!Array.isArray(checkAlreadyPromoted)) throw new Error('Could not check existing enrollments. Please try again.')
+            if (checkAlreadyPromoted.length === 0) {
                 let events = []
                 let socioEconomicDataValues: any = []
 
                 const socioEconomicEvent = await getEvents({ program: tei.programId, fields: "*", trackedEntities: tei.trackedEntity, programStage: socioEconomicPStage })
+                if (!Array.isArray(socioEconomicEvent)) throw new Error('Could not load the enrollment details. Please try again.')
                 const event = socioEconomicEvent?.find((x: any) => x.enrollment === tei.enrollmentId)
 
                 if (event) {
@@ -89,6 +94,11 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
         setOpenPerform(false)
         setLoading(false)
         setOpen(true)
+        } catch (error: any) {
+            show({ message: error?.message ?? 'Could not complete promotion. Please try again.', type: { critical: true } })
+        } finally {
+            setLoading(false)
+        }
     }
 
     return { promote }
