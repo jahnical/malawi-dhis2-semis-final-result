@@ -23,7 +23,7 @@ function EnrollmentActionsButtons({ programData, selectedDataStoreKey, selected,
     const { dataStoreData } = useGetSelectedKeys()
     const { formData } = useBuildForm({ dataStoreData, programData, module: Modules.Enrollment, schoolCalendar: schoolCalendar });
     const [enrollmentDetails = []] = formData
-    const [stats, setStats] = useState<{ posted: number, conflicts: any[] }>({ posted: 0, conflicts: [] })
+    const [stats, setStats] = useState<{ posted: number, conflicts: any[], failed?: any[] }>({ posted: 0, conflicts: [], failed: [] })
     const [open, setOpen] = useState<boolean>(false)
     const [loading, setLoading] = useState(true)
     const { hide, show } = useShowAlerts()

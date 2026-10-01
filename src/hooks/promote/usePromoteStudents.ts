@@ -1,14 +1,14 @@
 import { format } from "date-fns";
 import { useShowAlerts } from 'dhis2-semis-functions';
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
-import { enrollmentDates, getAcademicYearOptions, getProgramNames, useGetLearnerEnrollments, useSectionProfile, useUploadEvents, useUrlParams } from "dhis2-semis-functions"
+import { enrollmentDates, getAcademicYearOptions, getProgramNames, useGetLearnerEnrollments, useSectionProfile, useUploadEach, useUrlParams } from "dhis2-semis-functions"
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
 import { newYearEvents, newYearTrackedEntity } from "../../utils/promotion/newYearPayload";
 
 export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform, setLoading }: { setLoading: (args: boolean) => void, setOpenPerform: any, setStats: (args: any) => void, selected: any[], setOpen: (args: boolean) => void }) {
     const { urlParameters } = useUrlParams();
     const { school, sectionType } = urlParameters;
-    const { uploadValues } = useUploadEvents()
+    const { uploadEach } = useUploadEach()
     const { show } = useShowAlerts()
     const { promotionChoosesOrgUnit } = useSectionProfile()
     const schoolCalendar = useSchoolCalendarKey()
@@ -18,8 +18,11 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
 
     async function promote(values: any) {
         setLoading(true)
+        // A retry starts a fresh summary instead of adding to the last one
+        setStats({ posted: 0, conflicts: [], failed: [] })
         try {
-        let enrollments: any[] = []
+        // One entry per learner: their new-year enrollment plus the closing of last year's
+        let toSave: { tei: any, payload: any }[] = []
         let registrationEvent: any = []
         let date = format(new Date(), 'yyyy-MM-dd')
         const socioEconomicPStage = dataStoreData["socio-economics"]?.programStage
@@ -68,7 +71,7 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
                 .find((enrollment) => enrollment.enrollment === tei.enrollmentId)
                 ?.events?.find((event) => event.programStage === socioEconomicPStage && !event.deleted)
 
-            enrollments.push(newYearTrackedEntity({
+            toSave.push({ tei, payload: newYearTrackedEntity({
                 trackedEntity: tei.trackedEntity,
                 trackedEntityType: dataStoreData.trackedEntityType,
                 orgUnit,
@@ -86,12 +89,17 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
                     socioEconomicValues: (socioEconomicEvent?.dataValues ?? []).map((dataValue) => ({ dataElement: dataValue?.dataElement, value: dataValue?.value })),
                     placeholderStages: programStagesToUse as string[],
                 }),
-            }))
+            }) })
         }
 
-        if (enrollments.length) await uploadValues({ trackedEntities: enrollments }, 'COMMIT', 'CREATE_AND_UPDATE', { errorMessage: "Could not complete promotion", names: getProgramNames(programData) })
+        // Each learner saves on its own, all or nothing, so a rejected new enrollment never leaves
+        // last year's closed with nothing active (or the reverse), and one learner can't block the rest
+        const { saved, failed } = await uploadEach(toSave, {
+            toPayload: (item) => ({ trackedEntities: [item.payload] }),
+            names: getProgramNames(programData),
+        })
 
-        setStats((prev: any) => ({ ...prev, posted: enrollments.length }))
+        setStats((prev: any) => ({ ...prev, posted: saved.length, failed: failed.map(({ item, reason }) => ({ ...item.tei, reason })) }))
         setOpenPerform(false)
         setLoading(false)
         setOpen(true)

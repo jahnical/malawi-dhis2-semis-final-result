@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
-import { enrollmentDates, getAcademicYearOptions, getProgramNames, useGetLearnerEnrollments, useShowAlerts, useUploadEvents, useUrlParams } from "dhis2-semis-functions";
+import { enrollmentDates, getAcademicYearOptions, getProgramNames, useGetLearnerEnrollments, useShowAlerts, useUploadEach, useUrlParams } from "dhis2-semis-functions";
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
 import { newYearEvents, newYearTrackedEntity } from "../../utils/promotion/newYearPayload";
 
@@ -20,7 +20,7 @@ export interface CarryForwardRow {
 // a later one) is skipped.
 export function useCarryForward() {
     const { getLearnerEnrollments, planEnrollments } = useGetLearnerEnrollments()
-    const { uploadValues } = useUploadEvents()
+    const { uploadEach } = useUploadEach()
     const { show } = useShowAlerts()
     const { urlParameters } = useUrlParams()
     const { sectionType } = urlParameters
@@ -114,13 +114,13 @@ export function useCarryForward() {
             show({ message: "The academic year is not in the school calendar. The enrollment date is used as its start date.", type: { warning: true } })
         }
 
-        const trackedEntities = toCreate.map((item) => {
+        const toSave = toCreate.map((item) => {
             const registrationDataValues = Object.entries({ ...item.registrationValues, [academicYearDataElement]: targetYear })
                 .filter(([, value]) => value !== undefined && value !== null && value !== "")
                 .map(([dataElement, value]) => ({ dataElement, value }))
 
             // Same enrollment shape as the promotion flow
-            return newYearTrackedEntity({
+            return { item, payload: newYearTrackedEntity({
                 trackedEntity: item.trackedEntity,
                 trackedEntityType: dataStoreData?.trackedEntityType,
                 orgUnit: item.orgUnit,
@@ -137,20 +137,23 @@ export function useCarryForward() {
                     socioEconomicValues: socioEconomic.get(item.enrollmentId),
                     placeholderStages: programStagesToUse as string[],
                 }),
-            })
+            }) }
         })
 
-        if (trackedEntities.length === 0) return { posted: 0, conflicts: skipped }
+        if (toSave.length === 0) return { posted: 0, conflicts: skipped, failed: [] }
 
-        // Errors (e.g. a duplicate unique attribute) are shown by uploadValues with the server's reason
-        const response: any = await uploadValues({ trackedEntities }, "COMMIT", "CREATE_AND_UPDATE", {
-            errorMessage: "Could not carry staff forward",
+        // Each person saves on its own, all or nothing: last year's enrollment is never closed without
+        // the new one, and one rejected row (e.g. a school the user can't capture in) doesn't block the rest
+        const { saved, failed } = await uploadEach(toSave, {
+            toPayload: (entry) => ({ trackedEntities: [entry.payload] }),
             names: getProgramNames(program),
         })
-        // Some records can be rejected while the rest save; count the enrollments actually created
-        const created = response?.bundleReport?.typeReportMap?.ENROLLMENT?.stats?.created
 
-        return { posted: typeof created === "number" ? created : trackedEntities.length, conflicts: skipped }
+        return {
+            posted: saved.length,
+            conflicts: skipped,
+            failed: failed.map(({ item: entry, reason }) => ({ ...entry.item.row, reason })),
+        }
     }
 
     return { carryForward, getAlreadyRegistered, getStageValues, registrationStage, academicYearDataElement }

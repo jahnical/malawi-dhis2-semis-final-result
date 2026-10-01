@@ -178,7 +178,7 @@ export default function CarryForward({ selected, i18n, openStats, setStats }: Ca
                 },
             }))
             const result = await carryForward({ rows: payload, targetYear: effectiveTargetYear, enrollmentDate })
-            setStats({ posted: result.posted, conflicts: result.conflicts })
+            setStats({ posted: result.posted, conflicts: result.conflicts, failed: result.failed })
             setOpen(false)
             openStats(true)
             setRefetch((prev: boolean) => !prev)
