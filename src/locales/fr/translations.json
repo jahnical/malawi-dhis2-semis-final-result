@@ -56,5 +56,17 @@
     "Export Final Result": "Exporter le résultat final",
     "staff": "personnel",
     "student": "élève",
-    "students": "élèves"
+    "students": "élèves",
+    "Number of Learners": "Nombre d’élèves",
+    "Maximum number of learners supported for each file": "Nombre maximal d’élèves pris en charge par fichier",
+    "Learner promotion": "Promotion des élèves",
+    "Learner final result": "Résultat final de l’élève",
+    "Some selected learners have no final result or were not promoted.": "Certains élèves sélectionnés n’ont pas de résultat final ou n’ont pas été promus.",
+    "Promoted learners": "Élèves promus",
+    "No promoted learners": "Aucun élève promu",
+    "Learners Promotion Summary": "Résumé de la promotion des élèves",
+    "Learners promotion preview": "Aperçu de la promotion des élèves",
+    "The following learners were not promoted. They already exist on the selected academic year": "Les élèves suivants n’ont pas été promus. Ils existent déjà pour l’année académique sélectionnée",
+    "learner": "élève",
+    "learners": "élèves"
 }

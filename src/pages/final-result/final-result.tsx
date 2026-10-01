@@ -146,11 +146,11 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
     const levelColumn = {
       id: STUDENT_LEVEL_KEY,
       key: STUDENT_LEVEL_KEY,
-      displayName: i18n.t("Student Level"),
-      header: i18n.t("Student Level"),
+      displayName: i18n.t("Learner Level"),
+      header: i18n.t("Learner Level"),
       required: false,
-      name: i18n.t("Student Level"),
-      labelName: i18n.t("Student Level"),
+      name: i18n.t("Learner Level"),
+      labelName: i18n.t("Learner Level"),
       valueType: "TEXT" as any,
       disabled: false,
       visible: true,
@@ -244,7 +244,7 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
       }
     }
     return {
-      title: i18n.t("SEMIS-Final-Result"),
+      title: i18n.t("SEMIS-Learner-Final-Result"),
       sectionTitle: `${i18n.t("Follow the instructions to proceed")}:`,
       instructions: getInfoInstructions({ i18n, filters: (dataStoreData?.filters?.dataElements ?? []) as any, program: programData as any, academicYear: "required", sectionFilters: "optional" })
     }
@@ -462,7 +462,7 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
                       displayEmpty
                       value={studentLevelFilter}
                       onChange={(event) => setStudentLevelFilter(event.target.value)}
-                      renderValue={(selectedValue) => selectedValue === "ALL" ? i18n.t("Student Level") : String(selectedValue)}
+                      renderValue={(selectedValue) => selectedValue === "ALL" ? i18n.t("Learner Level") : String(selectedValue)}
                     >
                       <MenuItem value="ALL">{i18n.t("All")}</MenuItem>
                       {studentLevelOptions.map((level) => (

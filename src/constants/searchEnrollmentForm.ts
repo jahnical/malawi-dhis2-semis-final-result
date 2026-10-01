@@ -45,24 +45,24 @@ export const staticForm = ({i18n}:{i18n:any}) => {
     numberOfStudents: {
       required: false,
       name: "studentsNumber",
-      labelName: i18n.t("Number of Students"),
+      labelName: i18n.t("Number of Learners"),
       valueType: "NUMBER",
       options: undefined,
       disabled: false,
       pattern: "",
       visible: true,
-      description: i18n.t("Number of Students"),
+      description: i18n.t("Number of Learners"),
       searchable: false,
       error: false,
       programStage: "",
       content: "",
       id: "studentsNumber",
-      displayName: i18n.t("Number of Students"),
-      header: i18n.t("Number of Students"),
+      displayName: i18n.t("Number of Learners"),
+      header: i18n.t("Number of Learners"),
       type: VariablesTypes.DataElement,
       assignedValue: undefined,
       placeholder: `${i18n.t(
-        "Maximum number of students supported for each file"
+        "Maximum number of learners supported for each file"
       )}: 1000`,
     },
   };

@@ -156,7 +156,7 @@ export default function AsssignFinalResult({ selected, i18n }: { selected: any[]
                 open && <ModalComponent
                     children={<WithPadding>
                         <NoticeBox title={`${i18n.t("WARNING")}! ${selected.length} ${i18n.t("rows will be affected")}`} warning>
-                            {i18n.t("The final result will be assigned to the selected students.")}.
+                            {i18n.t("The final result will be assigned to the selected learners.")}.
                         </NoticeBox>
                         <WithBorder type="all" >
                             <WithPadding>
