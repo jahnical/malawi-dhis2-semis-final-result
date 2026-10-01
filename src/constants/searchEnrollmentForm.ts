@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import { VariablesTypes } from "dhis2-semis-types";
 
 export const staticForm = ({i18n}:{i18n:any}) => {
@@ -24,7 +23,8 @@ export const staticForm = ({i18n}:{i18n:any}) => {
       assignedValue: undefined,
     },
     enrollmentDate: {
-      required: true,
+      // Optional: left empty, the academic year's start date is used (today when the calendar has none)
+      required: false,
       name: "enrollment_date",
       labelName: i18n.t("Enrollment date"),
       valueType: "DATE",
@@ -32,7 +32,7 @@ export const staticForm = ({i18n}:{i18n:any}) => {
       disabled: false,
       pattern: "",
       visible: true,
-      description: i18n.t("Enrollment date"),
+      description: i18n.t("Leave empty to use the start of the academic year (today if the school calendar has no start date)"),
       searchable: false,
       error: false,
       programStage: "",
@@ -41,7 +41,6 @@ export const staticForm = ({i18n}:{i18n:any}) => {
       displayName: i18n.t("Enrollment date"),
       header: i18n.t("Enrollment date"),
       type: VariablesTypes.DataElement,
-      assignedValue: format(new Date(), "yyyy-MM-dd"),
     },
     numberOfStudents: {
       required: false,
