@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
 import { useSetRecoilState } from "recoil";
 import {
     Button, ButtonStrip, Center, Checkbox, CircularLoader, DataTable, DataTableBody, DataTableCell,
@@ -7,7 +6,8 @@ import {
     ModalContent, ModalTitle, NoticeBox, SingleSelect, SingleSelectOption, Tag,
 } from "@dhis2/ui";
 import { Modules, ProgramConfig, TableDataRefetch, VariablesTypes } from "dhis2-semis-types";
-import { useCheckFilters, useHeader, useTableData, useUrlParams } from "dhis2-semis-functions";
+import { useSchoolCalendarKey } from "dhis2-semis-components";
+import { enrollmentDates, useCheckFilters, useHeader, useTableData, useUrlParams } from "dhis2-semis-functions";
 import useGetSelectedKeys from "../../hooks/config/useGetSelectedKeys";
 import { useAccessibleOrgUnits } from "../../hooks/common/useAccessibleOrgUnits";
 import { CarryForwardRow, useCarryForward } from "../../hooks/promote/useCarryForward";
@@ -52,7 +52,8 @@ export default function CarryForward({ selected, i18n, openStats, setStats }: Ca
     const [saving, setSaving] = useState(false)
     const [rows, setRows] = useState<ReviewRow[]>([])
     const [alreadyRegistered, setAlreadyRegistered] = useState<Set<string>>(new Set())
-    const [enrollmentDate, setEnrollmentDate] = useState(format(new Date(), "yyyy-MM-dd"))
+    // "" until the user picks a date: then the target year's start (or today, without a calendar start) is used
+    const [enrollmentDate, setEnrollmentDate] = useState("")
 
     const registrationDataElements = useMemo(() =>
         program?.programStages?.find((stage) => stage.id === registrationStage)?.programStageDataElements?.map((x: any) => x.dataElement) ?? [],
@@ -69,6 +70,10 @@ export default function CarryForward({ selected, i18n, openStats, setStats }: Ca
     }, [academicYearOptions, academicYear])
     const [targetYear, setTargetYear] = useState("")
     const effectiveTargetYear = targetYear || nextYear
+    const schoolCalendar = useSchoolCalendarKey()
+    const defaultEnrollmentDate = useMemo(() => effectiveTargetYear
+        ? enrollmentDates({ calendar: schoolCalendar?.schoolCalendar ?? [], academicYear: effectiveTargetYear, options: academicYearOptions }).enrolledAt
+        : undefined, [effectiveTargetYear, schoolCalendar, academicYearOptions])
 
     const adjustableFields = useMemo(() => {
         const ids: string[] = (dataStoreData?.["final-result"] as any)?.adjustableFields ?? []
@@ -227,7 +232,7 @@ export default function CarryForward({ selected, i18n, openStats, setStats }: Ca
                             </div>
                             <div style={{ minWidth: 200 }}>
                                 <label>{i18n.t("Enrollment date")}</label>
-                                <Input dense type="date" value={enrollmentDate} onChange={({ value }: any) => setEnrollmentDate(value ?? "")} />
+                                <Input dense type="date" value={enrollmentDate || defaultEnrollmentDate || ""} onChange={({ value }: any) => setEnrollmentDate(value ?? "")} />
                             </div>
                         </ButtonStrip>
                         <br />

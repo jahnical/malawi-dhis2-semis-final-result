@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { format } from "date-fns";
 import { Form } from "react-final-form";
 import { NoticeBox, Button, IconAddCircle24, CircularLoader, Center } from "@dhis2/ui";
 import useGetSelectedKeys from "../../hooks/config/useGetSelectedKeys";
@@ -184,7 +183,6 @@ export default function PerformPromotion({ selected, setStats, openStats, formDa
                                         loading={loading}
                                         initialValues={{
                                             registeringSchool: promotionChoosesOrgUnit ? (selectedOrgUnit || school) : schoolName,
-                                            enrollment_date: format(new Date(), 'yyyy-MM-dd')
                                         }}
                                         formFields={[
                                             {

@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
-import { enrollmentDates, getAcademicYearOptions, getProgramNames, useGetLearnerEnrollments, useShowAlerts, useUploadEach, useUrlParams } from "dhis2-semis-functions";
+import { enrollmentDates, getAcademicYearOptions, getProgramNames, useGetLearnerEnrollments, useShowAlerts, useUploadEach, useUrlParams, TRANSITION_CONFLICT_MESSAGES } from "dhis2-semis-functions";
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
 import { newYearEvents, newYearTrackedEntity } from "../../utils/promotion/newYearPayload";
 
@@ -43,8 +43,9 @@ export function useCarryForward() {
         return byTrackedEntity
     }
 
-    async function getEventsByTrackedEntity(trackedEntities: string[]): Promise<Map<string, any[]>> {
-        return eventsOf(await getLearnerEnrollments(trackedEntities, program?.id as string))
+    // Only the stages asked for, never every event of every enrollment
+    async function getEventsByTrackedEntity(trackedEntities: string[], stages: (string | undefined)[]): Promise<Map<string, any[]>> {
+        return eventsOf(await getLearnerEnrollments(trackedEntities, program?.id as string, { stages }))
     }
 
     function planTargetYear(trackedEntities: string[], targetYear: string) {
@@ -56,6 +57,8 @@ export function useCarryForward() {
             registrationStage,
             academicYearDataElement,
             years: years(),
+            // Copied into the new year
+            extraStages: [socioEconomicStage],
         })
     }
 
@@ -66,14 +69,15 @@ export function useCarryForward() {
     // there, or enrolled in a later year
     async function getAlreadyRegistered(trackedEntities: string[], targetYear: string): Promise<Set<string>> {
         const { plans } = await planTargetYear(Array.from(new Set(trackedEntities)), targetYear)
-        return new Set(Array.from(plans.entries()).filter(([, plan]) => plan.conflict).map(([trackedEntity]) => trackedEntity))
+        // An unrecognised year is not "already registered"; it is reported when saving
+        return new Set(Array.from(plans.entries()).filter(([, plan]) => plan.conflict && plan.conflict !== 'UNKNOWN_ACADEMIC_YEAR').map(([trackedEntity]) => trackedEntity))
     }
 
     // Latest value of one data element in one stage, per enrollment (e.g. the re-enrollment status)
     async function getStageValues(trackedEntities: string[], stage?: string, dataElement?: string): Promise<Map<string, string>> {
         const values = new Map<string, string>()
         if (!stage || !dataElement) return values
-        const events = await getEventsByTrackedEntity(trackedEntities)
+        const events = await getEventsByTrackedEntity(trackedEntities, [stage])
         for (const teiEvents of events.values()) {
             for (const e of teiEvents) {
                 const value = e.programStage === stage ? valueOf(e, dataElement) : undefined
@@ -104,8 +108,11 @@ export function useCarryForward() {
         // Checked again at save time, in case someone was carried forward since the review opened
         const { plans, enrollments } = await planTargetYear(trackedEntityIds, targetYear)
         const events = eventsOf(enrollments)
-        const toCreate = rows.filter((x) => !plans.get(x.trackedEntity)?.conflict)
-        const skipped = rows.filter((x) => plans.get(x.trackedEntity)?.conflict).map((x) => x.row)
+        const conflictOf = (x: CarryForwardRow) => plans.get(x.trackedEntity)?.conflict
+        const toCreate = rows.filter((x) => !conflictOf(x))
+        const skipped = rows.filter((x) => conflictOf(x) && conflictOf(x) !== 'UNKNOWN_ACADEMIC_YEAR').map((x) => x.row)
+        const unrecognised = rows.filter((x) => conflictOf(x) === 'UNKNOWN_ACADEMIC_YEAR')
+            .map((x) => ({ ...x.row, reason: TRANSITION_CONFLICT_MESSAGES.UNKNOWN_ACADEMIC_YEAR }))
         const socioEconomic = socioEconomicByEnrollment(events)
 
         // occurredAt is the target year's start; enrolledAt the date entered (default: that start)
@@ -140,7 +147,7 @@ export function useCarryForward() {
             }) }
         })
 
-        if (toSave.length === 0) return { posted: 0, conflicts: skipped, failed: [] }
+        if (toSave.length === 0) return { posted: 0, conflicts: skipped, failed: unrecognised }
 
         // Each person saves on its own, all or nothing: last year's enrollment is never closed without
         // the new one, and one rejected row (e.g. a school the user can't capture in) doesn't block the rest
@@ -152,7 +159,7 @@ export function useCarryForward() {
         return {
             posted: saved.length,
             conflicts: skipped,
-            failed: failed.map(({ item: entry, reason }) => ({ ...entry.item.row, reason })),
+            failed: [...unrecognised, ...failed.map(({ item: entry, reason }) => ({ ...entry.item.row, reason }))],
         }
     }
 

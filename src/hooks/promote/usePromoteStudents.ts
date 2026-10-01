@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { useShowAlerts } from 'dhis2-semis-functions';
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
-import { enrollmentDates, getAcademicYearOptions, getProgramNames, useGetLearnerEnrollments, useSectionProfile, useUploadEach, useUrlParams } from "dhis2-semis-functions"
+import { enrollmentDates, getAcademicYearOptions, getProgramNames, TRANSITION_CONFLICT_MESSAGES, useGetLearnerEnrollments, useSectionProfile, useUploadEach, useUrlParams } from "dhis2-semis-functions"
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
 import { newYearEvents, newYearTrackedEntity } from "../../utils/promotion/newYearPayload";
 
@@ -58,10 +58,17 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
             registrationStage,
             academicYearDataElement,
             years: { calendars, options },
+            // Copied into the new year
+            extraStages: [socioEconomicPStage],
         }).catch(() => { throw new Error('Could not check existing enrollments. Please try again.') })
+        const unrecognised: any[] = []
 
         for (const tei of selected) {
             const plan = plans.get(tei.trackedEntity)!
+            if (plan.conflict === 'UNKNOWN_ACADEMIC_YEAR') {
+                unrecognised.push({ ...tei, reason: TRANSITION_CONFLICT_MESSAGES.UNKNOWN_ACADEMIC_YEAR })
+                continue
+            }
             if (plan.conflict) {
                 setStats((prev: any) => ({ ...prev, conflicts: [...prev.conflicts, tei] }))
                 continue
@@ -99,7 +106,7 @@ export function usePromoteStudents({ selected, setOpen, setStats, setOpenPerform
             names: getProgramNames(programData),
         })
 
-        setStats((prev: any) => ({ ...prev, posted: saved.length, failed: failed.map(({ item, reason }) => ({ ...item.tei, reason })) }))
+        setStats((prev: any) => ({ ...prev, posted: saved.length, failed: [...unrecognised, ...failed.map(({ item, reason }) => ({ ...item.tei, reason }))] }))
         setOpenPerform(false)
         setLoading(false)
         setOpen(true)
