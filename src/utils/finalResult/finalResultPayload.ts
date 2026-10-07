@@ -4,11 +4,12 @@ type DataValue = { dataElement: string, value: any }
 
 /**
  * Tracked entity payload that records a final result for one enrollment.
- * The enrollment is COMPLETED (or CANCELLED for a dropout) and keeps its own org unit and dates;
- * only the final-result event is dated today.
+ * The enrollment is COMPLETED (or CANCELLED for a dropout) and keeps its own org unit and dates.
+ * The final-result event, new or existing, is dated `eventDate`: the last day of the academic year,
+ * or today when the decision is recorded during the year (not the enrollment date it was created with).
  */
 export function finalResultTrackedEntity({ enrollment, trackedEntity, trackedEntityType, program, existingEvent, submittedDataValues,
-    statusDataElement, dropoutStatusValues, programStage, eventOrgUnit, trackedEntityOrgUnit, today }: {
+    statusDataElement, dropoutStatusValues, programStage, eventOrgUnit, trackedEntityOrgUnit, today, eventDate }: {
     enrollment: ExistingEnrollment
     trackedEntity: string
     trackedEntityType?: string
@@ -23,7 +24,10 @@ export function finalResultTrackedEntity({ enrollment, trackedEntity, trackedEnt
     eventOrgUnit: string
     trackedEntityOrgUnit: string
     today: string
+    // Date of the final-result event (see stageEventDate in dhis2-semis-functions); defaults to today
+    eventDate?: string
 }) {
+    const date = eventDate ?? today
     const merged = new Map<string, any>()
     for (const dataValue of existingEvent?.dataValues ?? []) {
         if (dataValue?.dataElement) merged.set(dataValue.dataElement, dataValue.value)
@@ -31,14 +35,14 @@ export function finalResultTrackedEntity({ enrollment, trackedEntity, trackedEnt
     for (const dataValue of submittedDataValues) merged.set(dataValue.dataElement, dataValue.value)
 
     const event = existingEvent
-        ? { ...existingEvent, dataValues: Array.from(merged.entries()).map(([dataElement, value]) => ({ dataElement, value })) }
+        ? { ...existingEvent, occurredAt: date, dataValues: Array.from(merged.entries()).map(([dataElement, value]) => ({ dataElement, value })) }
         : {
             orgUnit: eventOrgUnit,
             status: "COMPLETED",
             program,
             programStage,
-            occurredAt: today,
-            scheduledAt: today,
+            occurredAt: date,
+            scheduledAt: date,
             dataValues: submittedDataValues,
         }
 

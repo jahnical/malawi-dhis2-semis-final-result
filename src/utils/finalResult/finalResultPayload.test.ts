@@ -18,5 +18,14 @@ test("a dropout cancels the enrollment; an existing event is updated in place", 
     const existingEvent = { event: "F1", orgUnit: "S1", occurredAt: "2026-06-01", dataValues: [{ dataElement: "remark", value: "x" }, { dataElement: "FS", value: "Promoted" }] }
     const [saved] = finalResultTrackedEntity({ ...common, existingEvent, submittedDataValues: [{ dataElement: "FS", value: "dropout" }] }).enrollments
     expect(saved).toMatchObject({ status: "CANCELLED", enrolledAt: "2025-09-10", occurredAt: "2025-09-08" })
-    expect(saved.events[0]).toEqual({ ...existingEvent, dataValues: [{ dataElement: "remark", value: "x" }, { dataElement: "FS", value: "dropout" }] })
+    // Updated in place, and re-dated: no longer the date the placeholder was created with
+    expect(saved.events[0]).toEqual({ ...existingEvent, occurredAt: "2026-07-20", dataValues: [{ dataElement: "remark", value: "x" }, { dataElement: "FS", value: "dropout" }] })
+})
+
+test("the final-result event takes eventDate (year end for a past year) when given", () => {
+    const existingEvent = { event: "F1", orgUnit: "S1", occurredAt: "2018-09-10", dataValues: [] }
+    const [saved] = finalResultTrackedEntity({ ...common, existingEvent, eventDate: "2019-07-19", submittedDataValues: [{ dataElement: "FS", value: "Promoted" }] }).enrollments
+    expect(saved.events[0]).toMatchObject({ event: "F1", occurredAt: "2019-07-19" })
+    const [fresh] = finalResultTrackedEntity({ ...common, eventDate: "2019-07-19", submittedDataValues: [{ dataElement: "FS", value: "Promoted" }] }).enrollments
+    expect(fresh.events[0]).toMatchObject({ occurredAt: "2019-07-19", scheduledAt: "2019-07-19" })
 })

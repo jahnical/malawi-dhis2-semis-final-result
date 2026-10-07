@@ -2,9 +2,24 @@ import { enrollmentsForTransition, type TransitionPlan } from "dhis2-semis-funct
 
 type DataValue = { dataElement: string, value: any }
 
+/**
+ * Date of the new year's events: the enrollment date (default: the year start), never later than today.
+ * Using the day of the promotion instead would put the events of a back-captured year in the wrong period.
+ */
+export function newYearEventDate(dates: { enrolledAt?: string, occurredAt?: string }, today: string = localToday()): string {
+    const date = (dates.enrolledAt || dates.occurredAt || today).slice(0, 10)
+    return date < today ? date : today
+}
+
+function localToday(): string {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, "0")
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
 // Events of a new academic year's enrollment: socio-economics copied from the current year (when any),
 // the registration event and empty placeholders for the other stages used by the section.
-export function newYearEvents({ program, orgUnit, date, registrationStage, registrationValues, socioEconomicStage, socioEconomicValues = [], placeholderStages }: {
+export function newYearEvents({ program, orgUnit, date, registrationStage, registrationValues, socioEconomicStage, socioEconomicValues = [], placeholderStages, stageDate }: {
     program: string
     orgUnit: string
     date: string
@@ -13,14 +28,16 @@ export function newYearEvents({ program, orgUnit, date, registrationStage, regis
     socioEconomicStage?: string
     socioEconomicValues?: DataValue[]
     placeholderStages: string[]
+    // Date of each placeholder (stageDatesForYear: term end, year end, never after today); default `date`
+    stageDate?: (programStage?: string) => string
 }) {
-    const event = (programStage: string, dataValues: DataValue[]) =>
-        ({ occurredAt: date, notes: [], status: "ACTIVE", program, programStage, orgUnit, scheduledAt: date, dataValues })
+    const event = (programStage: string, dataValues: DataValue[], on: string = date) =>
+        ({ occurredAt: on, notes: [], status: "ACTIVE", program, programStage, orgUnit, scheduledAt: on, dataValues })
 
     return [
         ...(socioEconomicStage && socioEconomicValues.length ? [event(socioEconomicStage, socioEconomicValues)] : []),
         event(registrationStage, registrationValues),
-        ...placeholderStages.map((stage) => event(stage, [])),
+        ...placeholderStages.map((stage) => event(stage, [], stageDate?.(stage) ?? date)),
     ]
 }
 

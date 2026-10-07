@@ -40,3 +40,62 @@
   background-color: #f3f5f7;
   border-color: #d7dde3;
 }
+
+.repeat {
+  color: #6a4a00;
+  background-color: #fff7e0;
+  border-color: #f0d68a;
+}
+
+.awaiting {
+  color: #7a4f00;
+  background-color: #fff4d6;
+  border-color: #f2c94c;
+}
+
+/* Next-year badges carry year and grade names, which keep their own capitalisation */
+.plain {
+  text-transform: none;
+}
+
+/* Learner levels, top to bottom */
+.levelStrong {
+  color: #ffffff;
+  background-color: #1e7a34;
+  border-color: #1e7a34;
+}
+
+.levelGood {
+  color: #1e6b24;
+  background-color: #dff3e3;
+  border-color: #9fd8aa;
+}
+
+.levelAverage {
+  color: #7a4f00;
+  background-color: #fff4d6;
+  border-color: #f2c94c;
+}
+
+.levelFail {
+  color: #ffffff;
+  background-color: #c53030;
+  border-color: #c53030;
+}
+
+/* Icon-only status: the wording is in the tooltip */
+.iconOnly {
+  padding: 3px 5px;
+  gap: 0;
+}
+
+.muted {
+  color: #6e7a8a;
+}
+
+/* Level chip: just the number, a fixed width so the column lines up */
+.level {
+  justify-content: center;
+  min-width: 28px;
+  padding: 3px 8px;
+}

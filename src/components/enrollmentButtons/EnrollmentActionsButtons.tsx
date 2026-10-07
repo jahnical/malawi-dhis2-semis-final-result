@@ -14,8 +14,15 @@ import useGetSelectedKeys from '../../hooks/config/useGetSelectedKeys';
 import { staticForm } from "../../constants/searchEnrollmentForm";
 import { getContextualLabels } from '../../utils/common/getContextualLabels';
 import { useSetRecoilState } from 'recoil';
+import type { Progression } from '../../utils/progression/progression';
 
-function EnrollmentActionsButtons({ programData, selectedDataStoreKey, selected, i18n, baseUrl }: { selected: any, programData: ProgramConfig, selectedDataStoreKey: selectedDataStoreKey, i18n: any, baseUrl: string }) {
+function EnrollmentActionsButtons({ programData, selectedDataStoreKey, selected, i18n, baseUrl, progression, onDecisionsSaved, promotionRequest }: {
+    selected: any, programData: ProgramConfig, selectedDataStoreKey: selectedDataStoreKey, i18n: any, baseUrl: string
+    progression?: Map<string, Progression>
+    onDecisionsSaved?: (enrollmentIds: string[]) => void
+    // Opens the next-year enrollment modal when it changes
+    promotionRequest?: number
+}) {
     const { urlParameters } = useUrlParams();
     const schoolCalendar = useSchoolCalendarKey()
     const { school: orgUnit, class: section, grade, academicYear, sectionType } = urlParameters;
@@ -97,13 +104,13 @@ function EnrollmentActionsButtons({ programData, selectedDataStoreKey, selected,
             <ShowStats open={open} setOpen={setOpen} stats={stats} />
             <ButtonStrip className={styles.work_buttons}>
                 {hasStatusStage && <Tooltip title={orgUnit === null ? "Please select an organisation unit before" : ""}>
-                    <AsssignFinalResult i18n={i18n} selected={selected} />
+                    <AsssignFinalResult i18n={i18n} selected={selected} onSaved={onDecisionsSaved} />
                 </Tooltip>}
 
                 <Tooltip title={orgUnit === null ? "Please select an organisation unit before" : ""} >
                     {reEnrollByCarryForward
                         ? <span><CarryForward i18n={i18n} selected={selected} openStats={setOpen} setStats={setStats} /></span>
-                        : <PerformPromotion i18n={i18n} formData={[staticForm({ i18n }).registeringSchool, ...enrollmentDetails, staticForm({ i18n }).enrollmentDate]} openStats={setOpen} setStats={setStats} selected={selected} />}
+                        : <PerformPromotion i18n={i18n} formData={[staticForm({ i18n }).registeringSchool, ...enrollmentDetails, staticForm({ i18n }).enrollmentDate]} openStats={setOpen} setStats={setStats} selected={selected} progression={progression} openRequest={promotionRequest} />}
                 </Tooltip>
 
                 {hasStatusStage && <Tooltip title={(section === null || grade === null || academicYear == undefined) ? labels.selectFiltersTooltip : ""} >
