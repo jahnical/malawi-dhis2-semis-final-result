@@ -1,8 +1,7 @@
-import { format } from "date-fns";
 import useGetSelectedKeys from "../config/useGetSelectedKeys";
 import { enrollmentDates, getAcademicYearOptions, getProgramNames, useGetLearnerEnrollments, useShowAlerts, useUploadEach, useUrlParams, TRANSITION_CONFLICT_MESSAGES } from "dhis2-semis-functions";
 import { useGetUsedProgramStages, useSchoolCalendarKey } from "dhis2-semis-components";
-import { newYearEvents, newYearTrackedEntity } from "../../utils/promotion/newYearPayload";
+import { newYearEventDate, newYearEvents, newYearTrackedEntity } from "../../utils/promotion/newYearPayload";
 
 export interface CarryForwardRow {
     trackedEntity: string
@@ -102,7 +101,6 @@ export function useCarryForward() {
     }
 
     async function carryForward({ rows, targetYear, enrollmentDate }: { rows: CarryForwardRow[], targetYear: string, enrollmentDate: string }) {
-        const date = format(new Date(), "yyyy-MM-dd")
         const trackedEntityIds = rows.map((x) => x.trackedEntity)
 
         // Checked again at save time, in case someone was carried forward since the review opened
@@ -137,7 +135,7 @@ export function useCarryForward() {
                 events: newYearEvents({
                     program: program?.id as string,
                     orgUnit: item.orgUnit,
-                    date,
+                    date: newYearEventDate(dates),
                     registrationStage,
                     registrationValues: registrationDataValues,
                     socioEconomicStage,

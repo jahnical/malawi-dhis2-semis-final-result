@@ -1,0 +1,43 @@
+.skipped {
+  margin-top: 6px;
+}
+
+.groupsTitle {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.groupsDescription {
+  font-size: 13px;
+  color: #4a5768;
+  margin-bottom: 8px;
+}
+
+.groups {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.groups th {
+  text-align: left;
+  font-weight: 600;
+  color: #4a5768;
+  padding: 4px 8px;
+  border-bottom: 1px solid #d5dde5;
+}
+
+.groups td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #eef1f4;
+  vertical-align: top;
+}
+
+.groups td:last-child {
+  min-width: 200px;
+}
+
+.yearSelect {
+  min-width: 240px;
+}

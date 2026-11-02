@@ -1,0 +1,86 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 6px 12px;
+  border: 1px solid #d5dde5;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  font-size: 14px;
+  color: #212934;
+}
+
+/* Stacked bar of the whole list: each segment grows with its count */
+.bar {
+  display: flex;
+  flex: 1 1 200px;
+  max-width: 360px;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: #e8edf2;
+}
+
+.segment {
+  height: 100%;
+}
+
+.segment + .segment {
+  border-left: 2px solid #f8f9fa;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none !important;
+}
+
+.count svg {
+  font-size: 16px;
+}
+
+.total {
+  color: #6e7a8a;
+}
+
+.info {
+  font-size: 18px !important;
+  color: #6e7a8a;
+  cursor: help;
+}
+
+/* Segment colours (background) and legend colours (text) */
+.enrolled {
+  background-color: #2e9e4a;
+  color: #1e6b24;
+}
+
+.awaiting {
+  background-color: #f2b72c;
+  color: #7a4f00;
+}
+
+.dropout {
+  background-color: #e07b39;
+  color: #a65218;
+}
+
+.noDecision {
+  background-color: #c4ccd6;
+  color: #4a5768;
+}

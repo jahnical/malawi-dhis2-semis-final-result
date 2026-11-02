@@ -8,21 +8,29 @@ import { Box, FormControl, MenuItem, Select } from '@mui/material';
 import useGetSelectedKeys from '../../hooks/config/useGetSelectedKeys';
 import { useFinalResultConst } from '../../hooks/common/finalResultConst';
 import EnrollmentActionsButtons from "../../components/enrollmentButtons/EnrollmentActionsButtons";
-import { getInfoInstructions, useCheckFilters, useGetEvents, useHeader, useTableData, useTableSort, useUrlParams, useViewPortWidth } from "dhis2-semis-functions";
+import { getAcademicYearOptions, getInfoInstructions, useCheckFilters, useGetEvents, useHeader, useTableData, useTableSort, useUrlParams, useViewPortWidth } from "dhis2-semis-functions";
+import ProgressionBanner from "../../components/progression/ProgressionBanner";
+import { decisionLabel, decisionTooltip, levelComponent, nextYearStatusComponent, statusComponent } from "../../components/status/status";
+import { levelTier, shortLevel } from "../../utils/level/levelTier";
+import { useProgression } from "../../hooks/progression/useProgression";
+import { classifyDecision, dataElementOptions, optionLabel, type ProgressionState } from "../../utils/progression/progression";
 
 const TERM3_TOTAL_KEY = "term3Total";
 const STUDENT_LEVEL_KEY = "studentLevel";
+// The level's name; STUDENT_LEVEL_KEY holds its coloured badge
+const LEVEL_LABEL_KEY = "__levelLabel";
 const FINAL_DECISION_RAW_KEY = "__finalDecisionRaw";
 const FINAL_DECISION_LABEL_KEY = "__finalDecisionLabel";
+const NEXT_YEAR_KEY = "nextYearStatus";
+const PROGRESSION_STATE_KEY = "__progressionState";
+// Average score behind the level, so levels sort in score order rather than by name
+const LEVEL_SCORE_KEY = "__levelScore";
+// Computed for the rows of the page only, so these columns are sorted on the page instead of across the list
+const PAGE_SORT_KEYS = [TERM3_TOTAL_KEY, STUDENT_LEVEL_KEY];
 
 const toNumber = (value: unknown): number | null => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-};
-
-const toNumberOrZero = (value: unknown): number => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const normalize = (value: unknown): string => String(value ?? "").trim().toLowerCase();
@@ -53,11 +61,17 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
   const [updatedData, updateData] = useState<any[]>([])
   const [studentLevelFilter, setStudentLevelFilter] = useState("ALL")
   const [finalDecisionFilter, setFinalDecisionFilter] = useState("ALL")
-  const [term3Sort, setTerm3Sort] = useState<"none" | "asc" | "desc">("none")
+  const [nextYearFilter, setNextYearFilter] = useState<"ALL" | ProgressionState>("ALL")
+  // Decisions just recorded, so the next step can be offered; afterLoad is the load count at that moment
+  const [justSaved, setJustSaved] = useState<{ enrollmentIds: string[], afterLoad: number } | undefined>()
+  const [promotionRequest, setPromotionRequest] = useState(0)
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50, totalPages: 0, totalElements: 0 })
   const { sort, order, orderBy, createSortHandler, withSortableColumns } = useTableSort({ onSortChange: () => setPagination((prev) => ({ ...prev, page: 1 })) })
   const { academicYear, grade, class: section, schoolName, school, sectionType } = urlParameters;
   const { getData, tableData, loading, sortableKeys } = useTableData({ module: Modules.Final_Result });
+  const sortsOnPage = Boolean(sort?.orderBy && PAGE_SORT_KEYS.includes(sort.orderBy))
+  const listSort = sortsOnPage ? undefined : sort
+  const columnsSortable = useMemo(() => new Set([...sortableKeys, ...PAGE_SORT_KEYS]), [sortableKeys])
   const { columns } = useHeader({ dataStoreData, programConfigData: programData as unknown as ProgramConfig, programStage: dataStoreData?.['final-result']?.programStage as unknown as string });
   const { getEvents } = useGetEvents();
   const [filetrState, setFilterState] = useState<{ dataElements: any[], attributes: any[] }>({ attributes: [], dataElements: [] });
@@ -65,6 +79,23 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
   const { finalResultConst } = useFinalResultConst({ updateData, data: tableData.data })
   const schoolCalendar = useSchoolCalendarKey()
   const { getFilters } = useCheckFilters({ filters: (dataStoreData?.filters?.dataElements ?? []) as unknown as any })
+  const isStudent = sectionType !== 'staff'
+  const listFilters: string[] = [
+    ...(academicYear ? [`${schoolCalendar?.academicYear}:in:${academicYear}`] : []),
+    ...getFilters() as unknown as any
+  ]
+  const progression = useProgression({
+    enabled: isStudent && Boolean(school && academicYear),
+    program: programData?.id,
+    orgUnit: school,
+    dataElementFilters: listFilters,
+    attributeFilters: filetrState.attributes,
+    reloadKey: refetch,
+  })
+  const academicYearDataElement = (dataStoreData?.registration?.academicYear || schoolCalendar?.academicYear) as string
+  const academicYearOptions = useMemo(() => getAcademicYearOptions(programData, academicYearDataElement)
+    .map((option) => ({ value: String(option.value ?? option.code), label: option.label })), [programData, academicYearDataElement])
+  const gradeOptions = useMemo(() => dataElementOptions(programData, dataStoreData?.registration?.grade), [programData, dataStoreData?.registration?.grade])
 
   const performanceConfig = (dataStoreData as any)?.performance || {};
   const performanceProgramStages: string[] = (performanceConfig?.programStages || [])
@@ -122,7 +153,7 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
     return labels;
   }, [programData?.programStages, dataStoreData, finalDecisionId]);
 
-  const computedColumns = useMemo(() => {
+  const scoreColumns = useMemo(() => {
     const baseColumns = columns ? [...columns] : [];
 
     const term3Column = {
@@ -196,44 +227,128 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
     return withoutComputed.concat([term3Column, levelColumn]);
   }, [columns, i18n, dataStoreData]);
 
+  // Students get a "Next year" column right after the final decision: a decision is not an enrollment
+  const computedColumns = useMemo(() => {
+    if (!isStudent) return scoreColumns
+    const nextYearColumn = {
+      id: NEXT_YEAR_KEY,
+      key: NEXT_YEAR_KEY,
+      displayName: i18n.t("Next year"),
+      header: i18n.t("Next year"),
+      required: false,
+      name: i18n.t("Next year"),
+      labelName: i18n.t("Next year"),
+      valueType: "TEXT" as any,
+      disabled: false,
+      visible: true,
+      pattern: "",
+      searchable: false,
+      error: false,
+      content: "",
+      type: VariablesTypes.Custom
+    } as any;
+    const decisionIndex = scoreColumns.findIndex((column: any) => finalDecisionId && column?.id === finalDecisionId)
+    const copy = [...scoreColumns]
+    copy.splice(decisionIndex >= 0 ? decisionIndex + 1 : copy.length, 0, nextYearColumn)
+    return copy
+  }, [scoreColumns, isStudent, finalDecisionId, i18n]);
+
   const studentLevelOptions = useMemo(() => {
     return Array.from(new Set(
       updatedData
-        .map((row) => String(row?.[STUDENT_LEVEL_KEY] ?? "").trim())
+        .map((row) => String(row?.[LEVEL_LABEL_KEY] ?? "").trim())
         .filter((value) => value.length > 0 && value !== "-")
     ))
   }, [updatedData]);
 
+  // Each row's next-year status ("…" until it has loaded), and a promotion decision worded as still to
+  // happen until the learner is enrolled in the next year
+  const finalResultConfig = dataStoreData?.["final-result"] as any
+  const rowsWithProgression = useMemo(() => {
+    if (!isStudent) return updatedData
+    return updatedData.map((row) => {
+      const known = progression.byEnrollment.get(row?.enrollmentId)
+      const rawDecision = row?.[FINAL_DECISION_RAW_KEY]
+      const metadataLabel = row?.[FINAL_DECISION_LABEL_KEY] || undefined
+      const decision = known?.decision ?? classifyDecision(rawDecision, {
+        validStatusValues: finalResultConfig?.validStatusValue, dropoutStatusValues: finalResultConfig?.dropoutStatusValues, label: metadataLabel,
+      })
+      const reworded = decision === 'ADVANCE' || decision === 'REPEAT'
+      const enrolled = known?.state === 'ENROLLED'
+      const shownLabel = decisionLabel({ label: metadataLabel, decision, enrolled })
+      return {
+        ...row,
+        ...(reworded && finalDecisionId ? {
+          [finalDecisionId]: statusComponent({ option: { label: shownLabel as string, value: rawDecision, style: { color: "" } }, tooltip: decisionTooltip({ decision, enrolled }) }),
+          [FINAL_DECISION_LABEL_KEY]: shownLabel,
+        } : {}),
+        [PROGRESSION_STATE_KEY]: known?.state,
+        [NEXT_YEAR_KEY]: nextYearStatusComponent({
+          state: known?.state,
+          nextYear: known?.nextYear,
+          labels: {
+            year: optionLabel(academicYearOptions, known?.nextYear?.academicYear),
+            grade: optionLabel(gradeOptions, known?.nextYear?.grade),
+          },
+        }),
+      }
+    })
+  }, [updatedData, progression.byEnrollment, isStudent, academicYearOptions, gradeOptions, finalDecisionId, finalResultConfig]);
+
   const finalDecisionOptions = useMemo(() => {
     return Array.from(new Set(
-      updatedData
+      rowsWithProgression
         .map((row) => String(row?.[FINAL_DECISION_LABEL_KEY] ?? "").trim())
         .filter((value) => value.length > 0 && value !== "[object Object]")
     ))
-  }, [updatedData]);
+  }, [rowsWithProgression]);
 
   const displayedRows = useMemo(() => {
-    let rows = [...updatedData]
+    let rows = [...rowsWithProgression]
+
+    if (nextYearFilter !== "ALL") {
+      rows = rows.filter((row) => row?.[PROGRESSION_STATE_KEY] === nextYearFilter)
+    }
 
     if (studentLevelFilter !== "ALL") {
-      rows = rows.filter((row) => String(row?.[STUDENT_LEVEL_KEY] ?? "") === studentLevelFilter)
+      rows = rows.filter((row) => String(row?.[LEVEL_LABEL_KEY] ?? "") === studentLevelFilter)
     }
 
     if (finalDecisionFilter !== "ALL") {
       rows = rows.filter((row) => String(row?.[FINAL_DECISION_LABEL_KEY] ?? "") === finalDecisionFilter)
     }
 
-    if (term3Sort !== "none") {
+    if (sortsOnPage && sort) {
+      const valueOf = (row: any) => toNumber(sort.orderBy === TERM3_TOTAL_KEY ? row?.[TERM3_TOTAL_KEY] : row?.[LEVEL_SCORE_KEY])
       rows.sort((a, b) => {
-        const aValue = toNumberOrZero(a?.[TERM3_TOTAL_KEY])
-        const bValue = toNumberOrZero(b?.[TERM3_TOTAL_KEY])
-
-        return term3Sort === "asc" ? aValue - bValue : bValue - aValue
+        const aValue = valueOf(a)
+        const bValue = valueOf(b)
+        // Rows without marks stay at the bottom either way
+        if (aValue === null || bValue === null) return aValue === bValue ? 0 : aValue === null ? 1 : -1
+        return sort.order === "asc" ? aValue - bValue : bValue - aValue
       })
     }
 
     return rows
-  }, [updatedData, studentLevelFilter, finalDecisionFilter, term3Sort]);
+  }, [rowsWithProgression, studentLevelFilter, finalDecisionFilter, nextYearFilter, sortsOnPage, sort]);
+
+  // The table matches selected rows by deep comparison, and the next-year badge is rebuilt whenever the
+  // status loads, so selected rows are swapped for the current row objects (one per enrollment)
+  const currentSelected = useMemo(() => {
+    const byEnrollment = new Map(rowsWithProgression.map((row) => [row?.enrollmentId, row]))
+    return (selected as any[]).map((row) => byEnrollment.get(row?.enrollmentId) ?? row)
+  }, [selected, rowsWithProgression])
+
+  const awaitingOnPage = displayedRows.filter((row) => row?.[PROGRESSION_STATE_KEY] === 'AWAITING')
+  const justSavedReady = Boolean(justSaved) && progression.loads > (justSaved?.afterLoad ?? 0)
+  const justSavedRows = justSavedReady
+    ? rowsWithProgression.filter((row) => justSaved!.enrollmentIds.includes(row?.enrollmentId) && row?.[PROGRESSION_STATE_KEY] === 'AWAITING')
+    : []
+
+  const enrollRows = (rows: any[]) => {
+    setSelected(rows as any)
+    setPromotionRequest((n) => n + 1)
+  }
 
   const getInfoPageContent = () => {
     if (sectionType === 'staff') {
@@ -251,6 +366,12 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
   }
 
   const infoPageContent = getInfoPageContent()
+  const nextYearFilterLabels: Record<ProgressionState, string> = {
+    AWAITING: i18n.t("Awaiting enrollment"),
+    ENROLLED: i18n.t("Enrolled"),
+    NO_DECISION: i18n.t("No decision yet"),
+    DROPOUT: i18n.t("Not continuing"),
+  }
   const tableTitle = sectionType === 'staff' ? i18n.t('Staff Re-enrollment') : i18n.t('Final Results')
   const inactiveRowMessage = sectionType === 'staff' ? i18n.t('Terminated') : i18n.t('Dropout')
 
@@ -264,15 +385,12 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
         orgUnit: school!,
         baseProgramStage: dataStoreData?.registration?.programStage as string,
         attributeFilters: filetrState.attributes,
-        dataElementFilters: [
-          ...(academicYear ? [`${schoolCalendar?.academicYear}:in:${academicYear}`] : []),
-          ...getFilters() as unknown as any
-        ],
+        dataElementFilters: listFilters,
         otherProgramStage: dataStoreData?.['final-result']?.programStage,
         order: dataStoreData.defaults.defaultOrder,
-        sort: sort && { ...sort, program: programData! },
+        sort: listSort && { ...listSort, program: programData! },
       })
-  }, [sectionType, filetrState, refetch, pagination.page, pagination.pageSize, academicYear, grade, section, school, sort])
+  }, [sectionType, filetrState, refetch, pagination.page, pagination.pageSize, academicYear, grade, section, school, JSON.stringify(listSort)])
 
   useEffect(() => {
     setPagination((prev) => ({ ...prev, totalPages: tableData.pagination.totalPages, totalElements: tableData.pagination.totalElements }))
@@ -381,7 +499,9 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
         return {
           ...row,
           [TERM3_TOTAL_KEY]: totalLabel,
-          [STUDENT_LEVEL_KEY]: levelLabel,
+          [STUDENT_LEVEL_KEY]: matchedCode ? levelComponent({ label: levelLabel, short: shortLevel(levelLabel, matchedCode), tier: levelTier(matchedCode, gradeRanges) }) : levelLabel,
+          [LEVEL_LABEL_KEY]: levelLabel,
+          [LEVEL_SCORE_KEY]: matchedCode ? averagePercentage : undefined,
           [FINAL_DECISION_RAW_KEY]: resolvedFinalDecisionValue,
           [FINAL_DECISION_LABEL_KEY]: finalDecisionLabel
         }
@@ -408,11 +528,25 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
           />
           :
           <>
+            {isStudent && (
+              <ProgressionBanner
+                counts={progression.counts}
+                loading={progression.loading}
+                error={progression.error}
+                onRetry={() => void progression.reload()}
+                awaitingOnPage={awaitingOnPage.length}
+                onSelectAwaiting={() => setSelected(awaitingOnPage as any)}
+                justSaved={justSaved && { count: justSaved.enrollmentIds.length, awaiting: justSavedReady ? justSavedRows.length : undefined }}
+                onEnrollJustSaved={() => { enrollRows(justSavedRows); setJustSaved(undefined) }}
+                onDismissJustSaved={() => setJustSaved(undefined)}
+                busy={loading || progression.loading}
+              />
+            )}
             <Table
               programConfig={programData!}
               title={tableTitle}
               viewPortWidth={viewPortWidth}
-              columns={withSortableColumns(computedColumns, sortableKeys)}
+              columns={withSortableColumns(computedColumns, columnsSortable)}
               tableData={displayedRows}
               inactiveRowMessage={inactiveRowMessage}
               enableInactiveRowSelection={true}
@@ -421,15 +555,18 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
               rightElements={
                 <EnrollmentActionsButtons
                   i18n={i18n}
-                  selected={selected}
+                  selected={currentSelected}
                   selectedDataStoreKey={dataStoreData}
                   programData={programData as unknown as ProgramConfig}
                   baseUrl={baseUrl}
+                  progression={isStudent ? progression.byEnrollment : undefined}
+                  onDecisionsSaved={isStudent ? (enrollmentIds) => setJustSaved({ enrollmentIds, afterLoad: progression.loads }) : undefined}
+                  promotionRequest={promotionRequest}
                 />
               }
               setFilterState={setFilterState}
               selectable={true}
-              selected={selected}
+              selected={currentSelected}
               setSelected={setSelected}
               pagination={pagination}
               setPagination={setPagination}
@@ -493,30 +630,27 @@ export default function FinalResult({ i18n, baseUrl }: { i18n: D2I18n, baseUrl: 
                     </Select>
                   </FormControl>
 
-                  <FormControl
+                  {isStudent && <FormControl
                     size="small"
                     sx={{
-                      flex: { xs: "1 1 100%", sm: "1 1 210px" },
-                      minWidth: { xs: "100%", sm: 210 },
+                      flex: { xs: "1 1 100%", sm: "1 1 190px" },
+                      minWidth: { xs: "100%", sm: 190 },
                       "& .MuiInputBase-root": { height: 36 },
                       "& .MuiSelect-select": { py: 0.75 }
                     }}
                   >
                     <Select
                       displayEmpty
-                      value={term3Sort}
-                      onChange={(event) => setTerm3Sort(event.target.value as "none" | "asc" | "desc")}
-                      renderValue={(selectedValue) => {
-                        if (selectedValue === "asc") return `${i18n.t("Sort Term 3 Total")} (${i18n.t("Ascending")})`
-                        if (selectedValue === "desc") return `${i18n.t("Sort Term 3 Total")} (${i18n.t("Descending")})`
-                        return i18n.t("Sort Term 3 Total")
-                      }}
+                      value={nextYearFilter}
+                      onChange={(event) => setNextYearFilter(event.target.value as "ALL" | ProgressionState)}
+                      renderValue={(selectedValue) => selectedValue === "ALL" ? i18n.t("Next year") : nextYearFilterLabels[selectedValue as ProgressionState]}
                     >
-                      <MenuItem value="none">{i18n.t("Default order")}</MenuItem>
-                      <MenuItem value="asc">{i18n.t("Ascending")}</MenuItem>
-                      <MenuItem value="desc">{i18n.t("Descending")}</MenuItem>
+                      <MenuItem value="ALL">{i18n.t("All")}</MenuItem>
+                      {(Object.keys(nextYearFilterLabels) as ProgressionState[]).map((state) => (
+                        <MenuItem key={state} value={state}>{nextYearFilterLabels[state]}</MenuItem>
+                      ))}
                     </Select>
-                  </FormControl>
+                  </FormControl>}
                 </Box>
               }
             />
